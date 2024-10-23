@@ -1,0 +1,75 @@
+import cv2  # OpenCV for webcam
+from roboflow import Roboflow  # Roboflow to get the models
+
+# Initialize Roboflow with your API Key
+rf = Roboflow(api_key="zHeJ1HzzrSkiP3qDkZdV")
+
+# Load the oats model
+oats_project = rf.workspace().project("oats-detection")
+oats_model = oats_project.version("1").model  # Replace "1" with your actual version if needed
+
+# Load the containers model
+containers_project = rf.workspace().project("containers-hf9b8")
+containers_model = containers_project.version("1").model  # Replace "1" with your actual version if needed
+
+# Open webcam (0 is for default camera)
+cap = cv2.VideoCapture(0)
+
+while True:
+    # Read frame from the webcam
+    ret, frame = cap.read()
+
+    # Check if frame was captured
+    if not ret:
+        print("Failed to grab frame.")
+        break
+
+    # Save the frame to a temporary file to send it for prediction
+    cv2.imwrite("temp_frame.jpg", frame)
+
+    # Send frame to Oats model for prediction
+    oats_prediction = oats_model.predict("temp_frame.jpg").json()
+
+    # Send frame to Containers model for prediction
+    containers_prediction = containers_model.predict("temp_frame.jpg").json()
+
+    # Print the predictions for debugging
+    print("Oats Prediction:", oats_prediction)
+    print("Containers Prediction:", containers_prediction)
+
+    # Draw bounding boxes for oats
+    for pred in oats_prediction['predictions']:
+        x, y, w, h = pred['x'], pred['y'], pred['width'], pred['height']
+        label = pred['class']
+
+        # Calculate bounding box coordinates
+        start_point = (int(x - w / 2), int(y - h / 2))
+        end_point = (int(x + w / 2), int(y + h / 2))
+
+        # Draw rectangle and label for oats
+        cv2.rectangle(frame, start_point, end_point, (0, 255, 0), 2)  # Green for oats
+        cv2.putText(frame, label, (start_point[0], start_point[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
+
+    # Draw bounding boxes for containers
+    for pred in containers_prediction['predictions']:
+        x, y, w, h = pred['x'], pred['y'], pred['width'], pred['height']
+        label = pred['class']
+
+        # Calculate bounding box coordinates
+        start_point = (int(x - w / 2), int(y - h / 2))
+        end_point = (int(x + w / 2), int(y + h / 2))
+
+        # Draw rectangle and label for containers
+        cv2.rectangle(frame, start_point, end_point, (255, 0, 0), 2)  # Blue for containers
+        cv2.putText(frame, label, (start_point[0], start_point[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+
+    # Display the frame with bounding boxes for oats and containers
+    cv2.imshow("Oats & Containers Detection", frame)
+
+    # Break the loop if 'q' is pressed
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# Release the webcam and close OpenCV window
+cap.release()
+cv2.destroyAllWindows()
